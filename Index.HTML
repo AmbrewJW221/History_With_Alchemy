@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Humanity Progression Game</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #0f172a;
+  color: white;
+  overflow: hidden;
+}
+
+#hud {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  background: rgba(0,0,0,0.6);
+  padding: 10px;
+  border-radius: 10px;
+}
+
+#log {
+  position: fixed;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.7);
+  padding: 10px 20px;
+  border-radius: 10px;
+}
+
+.element {
+  position: absolute;
+  padding: 10px 14px;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 12px;
+  cursor: grab;
+  user-select: none;
+  transition: transform 0.15s, opacity 0.2s;
+}
+
+.element:active {
+  cursor: grabbing;
+  transform: scale(1.05);
+}
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="counter">Discovered: 0</div>
+</div>
+
+<div id="log">Drag elements together to evolve humanity</div>
+
+<script>
+
+// ===================== COMBINATIONS =====================
+const combos = {
+  "Human+Stone": "Tool",
+  "Human+Stick": "Spear",
+  "Human+Fire": "Cooking",
+  "Fire+Meat": "Cooked Food",
+  "Human+Tool": "Hunting",
+  "Hunting+Animal": "Meat",
+  "Human+Animal": "Domestication",
+  "Domestication+Animal": "Livestock",
+  "Human+Plant": "Gathering",
+  "Gathering+Time": "Farming",
+  "Farming+Water": "Agriculture",
+  "Agriculture+Human": "Settlement",
+  "Settlement+Human": "Village",
+  "Village+Time": "City",
+  "City+Time": "Civilization",
+  "Civilization+Time": "Empire",
+  "Human+Human": "Society",
+  "Society+Time": "Culture",
+  "Culture+Writing": "History",
+  "Human+Spear": "Weapon",
+  "Weapon+Human": "War",
+  "War+Civilization": "Collapse",
+  "Human+Thought": "Idea",
+  "Idea+Writing": "Knowledge",
+  "Knowledge+Time": "Science",
+  "Science+Metal": "Technology",
+  "Technology+Energy": "Electricity",
+  "Electricity+Metal": "Machine",
+  "Machine+Human": "Automation",
+  "Automation+Society": "Modern Society",
+  "Human+Sky": "Curiosity",
+  "Curiosity+Science": "Astronomy",
+  "Astronomy+Technology": "Space Travel",
+  "Space Travel+Human": "Future"
+};
+
+// ===================== START ELEMENTS =====================
+const START_ELEMENTS = [
+  "Human","Fire","Water","Stone","Stick",
+  "Animal","Plant","Time","Sky","Earth"
+];
+
+// ===================== STATE =====================
+let discovered = new Set();
+let elementsOnScreen = [];
+
+const log = document.getElementById("log");
+const counter = document.getElementById("counter");
+
+// ===================== SAVE / LOAD =====================
+function saveGame() {
+  const data = {
+    discovered: Array.from(discovered),
+    elements: elementsOnScreen.map(el => ({
+      name: el.textContent,
+      x: parseInt(el.style.left),
+      y: parseInt(el.style.top)
+    }))
+  };
+  localStorage.setItem("alchemySave", JSON.stringify(data));
+}
+
+function loadGame() {
+  const data = JSON.parse(localStorage.getItem("alchemySave"));
+  if (!data) return false;
+
+  discovered = new Set(data.discovered);
+
+  data.elements.forEach(e => {
+    createElement(e.name, e.x, e.y);
+  });
+
+  updateCounter();
+  return true;
+}
+
+// ===================== UI =====================
+function updateCounter() {
+  counter.textContent = "Discovered: " + discovered.size;
+}
+
+function showLog(text) {
+  log.textContent = text;
+}
+
+// ===================== DRAG SYSTEM =====================
+let currentDrag = null, offsetX = 0, offsetY = 0;
+
+function startDrag(e, el) {
+  currentDrag = el;
+  offsetX = e.clientX - el.offsetLeft;
+  offsetY = e.clientY - el.offsetTop;
+}
+
+window.addEventListener("mousemove", (e) => {
+  if (!currentDrag) return;
+  currentDrag.style.left = (e.clientX - offsetX) + "px";
+  currentDrag.style.top = (e.clientY - offsetY) + "px";
+});
+
+window.addEventListener("mouseup", () => {
+  if (!currentDrag) return;
+  checkCombine(currentDrag);
+  currentDrag = null;
+  saveGame();
+});
+
+// ===================== ELEMENT =====================
+function createElement(name, x = 100, y = 100) {
+  const el = document.createElement("div");
+  el.className = "element";
+  el.textContent = name;
+  el.style.left = x + "px";
+  el.style.top = y + "px";
+
+  el.addEventListener("mousedown", (e) => startDrag(e, el));
+
+  document.body.appendChild(el);
+  elementsOnScreen.push(el);
+}
+
+// ===================== COLLISION =====================
+function isColliding(a, b) {
+  const r1 = a.getBoundingClientRect();
+  const r2 = b.getBoundingClientRect();
+  return !(r1.right < r2.left || r1.left > r2.right || r1.bottom < r2.top || r1.top > r2.bottom);
+}
+
+function checkCombine(el) {
+  elementsOnScreen.forEach(other => {
+    if (other !== el && isColliding(el, other)) {
+      combine(el, other);
+    }
+  });
+}
+
+// ===================== COMBINE =====================
+function combine(aEl, bEl) {
+  const a = aEl.textContent;
+  const b = bEl.textContent;
+
+  const result = combos[a + "+" + b] || combos[b + "+" + a];
+
+  if (!result) {
+    showLog("Nothing happened...");
+    return;
+  }
+
+  if (!discovered.has(result)) {
+    discovered.add(result);
+    showLog("Discovered: " + result);
+    updateCounter();
+
+    createElement(
+      result,
+      (aEl.offsetLeft + bEl.offsetLeft) / 2,
+      (aEl.offsetTop + bEl.offsetTop) / 2
+    );
+  }
+
+  aEl.remove();
+  bEl.remove();
+  elementsOnScreen = elementsOnScreen.filter(e => e !== aEl && e !== bEl);
+
+  saveGame();
+}
+
+// ===================== INIT =====================
+function init() {
+  if (loadGame()) return;
+
+  START_ELEMENTS.forEach((el, i) => {
+    createElement(el, 80 + i * 90, 250);
+    discovered.add(el);
+  });
+
+  updateCounter();
+}
+
+init();
+
+</script>
+
+</body>
+</html>
