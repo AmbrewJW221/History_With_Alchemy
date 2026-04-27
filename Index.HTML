@@ -10,11 +10,47 @@ body {
   font-family: Arial, sans-serif;
   background: #0f172a;
   color: white;
+  display: flex;
+  height: 100vh;
   overflow: hidden;
 }
 
+/* SIDEBAR */
+#sidebar {
+  width: 220px;
+  background: #020617;
+  border-right: 2px solid #1e293b;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.sidebar-item {
+  background: #1e293b;
+  margin: 5px 0;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: grab;
+  text-align: center;
+}
+
+/* MAIN AREA */
+#gameArea {
+  flex: 1;
+  position: relative;
+}
+
+/* ELEMENTS IN WORLD */
+.element {
+  position: absolute;
+  padding: 10px;
+  background: #334155;
+  border-radius: 10px;
+  cursor: grab;
+}
+
+/* HUD */
 #hud {
-  position: fixed;
+  position: absolute;
   top: 10px;
   left: 10px;
   background: rgba(0,0,0,0.6);
@@ -23,7 +59,7 @@ body {
 }
 
 #log {
-  position: fixed;
+  position: absolute;
   bottom: 10px;
   left: 50%;
   transform: translateX(-50%);
@@ -31,213 +67,198 @@ body {
   padding: 10px 20px;
   border-radius: 10px;
 }
-
-.element {
-  position: absolute;
-  padding: 10px 14px;
-  background: #1e293b;
-  border: 1px solid #475569;
-  border-radius: 12px;
-  cursor: grab;
-  user-select: none;
-  transition: transform 0.15s, opacity 0.2s;
-}
-
-.element:active {
-  cursor: grabbing;
-  transform: scale(1.05);
-}
 </style>
 </head>
 <body>
 
-<div id="hud">
-  <div id="counter">Discovered: 0</div>
-</div>
+<div id="sidebar"></div>
 
-<div id="log">Drag elements together to evolve humanity</div>
+<div id="gameArea">
+  <div id="hud">Discovered: <span id="count">0</span></div>
+  <div id="log">Drag from sidebar into the world</div>
+</div>
 
 <script>
 
-// ===================== COMBINATIONS =====================
+// ================= COMBINATIONS =================
 const combos = {
-  "Human+Stone": "Tool",
-  "Human+Stick": "Spear",
-  "Human+Fire": "Cooking",
-  "Fire+Meat": "Cooked Food",
-  "Human+Tool": "Hunting",
-  "Hunting+Animal": "Meat",
-  "Human+Animal": "Domestication",
-  "Domestication+Animal": "Livestock",
-  "Human+Plant": "Gathering",
-  "Gathering+Time": "Farming",
-  "Farming+Water": "Agriculture",
-  "Agriculture+Human": "Settlement",
-  "Settlement+Human": "Village",
-  "Village+Time": "City",
-  "City+Time": "Civilization",
-  "Civilization+Time": "Empire",
-  "Human+Human": "Society",
-  "Society+Time": "Culture",
-  "Culture+Writing": "History",
-  "Human+Spear": "Weapon",
-  "Weapon+Human": "War",
-  "War+Civilization": "Collapse",
-  "Human+Thought": "Idea",
-  "Idea+Writing": "Knowledge",
-  "Knowledge+Time": "Science",
-  "Science+Metal": "Technology",
-  "Technology+Energy": "Electricity",
-  "Electricity+Metal": "Machine",
-  "Machine+Human": "Automation",
-  "Automation+Society": "Modern Society",
-  "Human+Sky": "Curiosity",
-  "Curiosity+Science": "Astronomy",
-  "Astronomy+Technology": "Space Travel",
-  "Space Travel+Human": "Future"
+  "Human+Stone":"Tool",
+  "Human+Stick":"Spear",
+  "Human+Fire":"Cooking",
+  "Fire+Meat":"Cooked Food",
+  "Human+Tool":"Hunting",
+  "Hunting+Animal":"Meat",
+  "Human+Animal":"Domestication",
+  "Domestication+Animal":"Livestock",
+  "Human+Plant":"Gathering",
+  "Gathering+Time":"Farming",
+  "Farming+Water":"Agriculture",
+  "Agriculture+Human":"Settlement",
+  "Settlement+Human":"Village",
+  "Village+Time":"City",
+  "City+Time":"Civilization",
+  "Civilization+Time":"Empire",
+  "Human+Human":"Society",
+  "Society+Time":"Culture",
+  "Culture+Writing":"History",
+  "Human+Spear":"Weapon",
+  "Weapon+Human":"War",
+  "War+Civilization":"Collapse",
+  "Human+Thought":"Idea",
+  "Idea+Writing":"Knowledge",
+  "Knowledge+Time":"Science",
+  "Science+Metal":"Technology",
+  "Technology+Energy":"Electricity",
+  "Electricity+Metal":"Machine",
+  "Machine+Human":"Automation",
+  "Automation+Society":"Modern Society",
+  "Human+Sky":"Curiosity",
+  "Curiosity+Science":"Astronomy",
+  "Astronomy+Technology":"Space Travel",
+  "Space Travel+Human":"Future",
+  "Fire+Stone":"Metal",
+  "Metal+Tool":"Advanced Tools",
+  "Advanced Tools+Human":"Engineering",
+  "Engineering+Time":"Industry",
+  "Industry+Energy":"Power Grid",
+  "Power Grid+Machine":"Factory",
+  "Factory+Society":"Urbanization",
+  "Urbanization+Time":"Modern City"
 };
 
-// ===================== START ELEMENTS =====================
-const START_ELEMENTS = [
+// =============== START ELEMENTS ===============
+const START = [
   "Human","Fire","Water","Stone","Stick",
   "Animal","Plant","Time","Sky","Earth"
 ];
 
-// ===================== STATE =====================
 let discovered = new Set();
 let elementsOnScreen = [];
 
+const sidebar = document.getElementById("sidebar");
+const gameArea = document.getElementById("gameArea");
 const log = document.getElementById("log");
-const counter = document.getElementById("counter");
+const count = document.getElementById("count");
 
-// ===================== SAVE / LOAD =====================
-function saveGame() {
-  const data = {
-    discovered: Array.from(discovered),
-    elements: elementsOnScreen.map(el => ({
-      name: el.textContent,
-      x: parseInt(el.style.left),
-      y: parseInt(el.style.top)
-    }))
-  };
-  localStorage.setItem("alchemySave", JSON.stringify(data));
+// =============== SAVE =================
+function save() {
+  localStorage.setItem("save", JSON.stringify({
+    discovered: [...discovered]
+  }));
 }
 
-function loadGame() {
-  const data = JSON.parse(localStorage.getItem("alchemySave"));
+function load() {
+  const data = JSON.parse(localStorage.getItem("save"));
   if (!data) return false;
 
   discovered = new Set(data.discovered);
-
-  data.elements.forEach(e => {
-    createElement(e.name, e.x, e.y);
-  });
-
-  updateCounter();
   return true;
 }
 
-// ===================== UI =====================
-function updateCounter() {
-  counter.textContent = "Discovered: " + discovered.size;
+// =============== UI =================
+function updateSidebar() {
+  sidebar.innerHTML = "";
+  discovered.forEach(el => {
+    const div = document.createElement("div");
+    div.className = "sidebar-item";
+    div.textContent = el;
+
+    div.onmousedown = (e) => spawnElement(el, e.clientX, e.clientY);
+
+    sidebar.appendChild(div);
+  });
+
+  count.textContent = discovered.size;
 }
 
-function showLog(text) {
-  log.textContent = text;
-}
-
-// ===================== DRAG SYSTEM =====================
-let currentDrag = null, offsetX = 0, offsetY = 0;
-
-function startDrag(e, el) {
-  currentDrag = el;
-  offsetX = e.clientX - el.offsetLeft;
-  offsetY = e.clientY - el.offsetTop;
-}
-
-window.addEventListener("mousemove", (e) => {
-  if (!currentDrag) return;
-  currentDrag.style.left = (e.clientX - offsetX) + "px";
-  currentDrag.style.top = (e.clientY - offsetY) + "px";
-});
-
-window.addEventListener("mouseup", () => {
-  if (!currentDrag) return;
-  checkCombine(currentDrag);
-  currentDrag = null;
-  saveGame();
-});
-
-// ===================== ELEMENT =====================
-function createElement(name, x = 100, y = 100) {
+// =============== SPAWN =================
+function spawnElement(name, x, y) {
   const el = document.createElement("div");
   el.className = "element";
   el.textContent = name;
   el.style.left = x + "px";
   el.style.top = y + "px";
 
-  el.addEventListener("mousedown", (e) => startDrag(e, el));
+  makeDraggable(el);
 
-  document.body.appendChild(el);
+  gameArea.appendChild(el);
   elementsOnScreen.push(el);
 }
 
-// ===================== COLLISION =====================
-function isColliding(a, b) {
-  const r1 = a.getBoundingClientRect();
-  const r2 = b.getBoundingClientRect();
-  return !(r1.right < r2.left || r1.left > r2.right || r1.bottom < r2.top || r1.top > r2.bottom);
+// =============== DRAG =================
+let current = null, offsetX=0, offsetY=0;
+
+function makeDraggable(el) {
+  el.onmousedown = (e) => {
+    current = el;
+    offsetX = e.offsetX;
+    offsetY = e.offsetY;
+  };
 }
 
-function checkCombine(el) {
-  elementsOnScreen.forEach(other => {
-    if (other !== el && isColliding(el, other)) {
-      combine(el, other);
+window.onmousemove = (e) => {
+  if (!current) return;
+  current.style.left = (e.clientX - offsetX) + "px";
+  current.style.top = (e.clientY - offsetY) + "px";
+};
+
+window.onmouseup = () => {
+  if (!current) return;
+  checkCombine(current);
+  current = null;
+};
+
+// =============== COLLISION =================
+function collide(a,b){
+  const r1=a.getBoundingClientRect();
+  const r2=b.getBoundingClientRect();
+  return !(r1.right<r2.left||r1.left>r2.right||r1.bottom<r2.top||r1.top>r2.bottom);
+}
+
+function checkCombine(el){
+  elementsOnScreen.forEach(other=>{
+    if(other!==el && collide(el,other)){
+      combine(el,other);
     }
   });
 }
 
-// ===================== COMBINE =====================
-function combine(aEl, bEl) {
-  const a = aEl.textContent;
-  const b = bEl.textContent;
+// =============== COMBINE =================
+function combine(aEl,bEl){
+  const a=aEl.textContent;
+  const b=bEl.textContent;
 
-  const result = combos[a + "+" + b] || combos[b + "+" + a];
+  const result = combos[a+"+"+b] || combos[b+"+"+a];
 
-  if (!result) {
-    showLog("Nothing happened...");
+  if(!result){
+    log.textContent="Nothing happened...";
     return;
   }
 
-  if (!discovered.has(result)) {
-    discovered.add(result);
-    showLog("Discovered: " + result);
-    updateCounter();
+  log.textContent="Discovered: "+result;
 
-    createElement(
-      result,
-      (aEl.offsetLeft + bEl.offsetLeft) / 2,
-      (aEl.offsetTop + bEl.offsetTop) / 2
-    );
+  if(!discovered.has(result)){
+    discovered.add(result);
+    updateSidebar();
+    save();
   }
+
+  spawnElement(result,
+    (aEl.offsetLeft+bEl.offsetLeft)/2,
+    (aEl.offsetTop+bEl.offsetTop)/2
+  );
 
   aEl.remove();
   bEl.remove();
-  elementsOnScreen = elementsOnScreen.filter(e => e !== aEl && e !== bEl);
-
-  saveGame();
+  elementsOnScreen = elementsOnScreen.filter(e=>e!==aEl && e!==bEl);
 }
 
-// ===================== INIT =====================
-function init() {
-  if (loadGame()) return;
-
-  START_ELEMENTS.forEach((el, i) => {
-    createElement(el, 80 + i * 90, 250);
-    discovered.add(el);
-  });
-
-  updateCounter();
+// =============== INIT =================
+function init(){
+  if(!load()){
+    START.forEach(e=>discovered.add(e));
+  }
+  updateSidebar();
 }
 
 init();
